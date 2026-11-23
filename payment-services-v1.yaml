@@ -1,0 +1,152 @@
+openapi: 3.0.3
+info:
+  title: Payments API
+  version: 1.0.0
+  description: API for submitting payment instructions and retrieving payment status and fraud screening results.
+servers:
+  - url: http://localhost:8080
+    description: Local development
+paths:
+  /payments:
+    post:
+      summary: Submit a payment
+      operationId: createPayment
+      tags: [Payments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+      responses:
+        '201':
+          description: Payment created and submitted for downstream processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '400':
+          description: Invalid request or unsupported currency
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /payments/{id}:
+    get:
+      summary: Retrieve a payment
+      operationId: getPayment
+      tags: [Payments]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Payment UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Payment details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '404':
+          description: Payment not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  schemas:
+    DestinationAccountRequest:
+      type: object
+      required: [name, accountNumber]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        accountNumber:
+          type: string
+          pattern: '^[0-9]{10,20}$'
+    PaymentRequest:
+      type: object
+      required: [sourceAccount, destinationAccount, amount, currency, reference, requestedExecutionDate]
+      properties:
+        sourceAccount:
+          type: string
+          pattern: '^[0-9]{10,20}$'
+        destinationAccount:
+          $ref: '#/components/schemas/DestinationAccountRequest'
+        amount:
+          type: number
+          format: decimal
+          exclusiveMinimum: true
+          minimum: 0
+          multipleOf: 0.01
+          description: Positive monetary amount with at most two decimal places and 15 integer digits.
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          description: Three-letter uppercase code; supported values are configured in the application.
+        reference:
+          type: string
+          minLength: 1
+          maxLength: 140
+        requestedExecutionDate:
+          type: string
+          format: date
+          description: Must be today or a future date.
+    DestinationAccountResponse:
+      type: object
+      properties:
+        name:
+          type: string
+        accountNumber:
+          type: string
+    PaymentResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sourceAccount:
+          type: string
+        destinationAccount:
+          $ref: '#/components/schemas/DestinationAccountResponse'
+        amount:
+          type: number
+          format: decimal
+        currency:
+          type: string
+        reference:
+          type: string
+        requestedExecutionDate:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [SUBMITTED, PROCESSING, COMPLETED, FAILED]
+        fraudDecision:
+          type: string
+          enum: [ACCEPT, REVIEW, DECLINE, PENDING]
+        fraudRiskScore:
+          type: number
+          nullable: true
+        fraudReasons:
+          type: array
+          items:
+            type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: string
+          example: VALIDATION_ERROR
+        message:
+          type: string
+          example: Amount must be greater than zero
